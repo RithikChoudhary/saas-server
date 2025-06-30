@@ -18,13 +18,14 @@ export function getEnvironmentConfig(): EnvironmentConfig {
   const isProduction = process.env.NODE_ENV === 'production';
   const isDevelopment = !isProduction;
 
-  const frontendUrl = isProduction 
-    ? process.env.FRONTEND_URL_PROD || 'https://saasdor.com'
-    : process.env.FRONTEND_URL_DEV || 'http://localhost:3000';
-
+  // Use the actual FRONTEND_URL from .env file
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  
+  // Construct backend URL from PORT
+  const port = process.env.PORT || '5000';
   const backendUrl = isProduction 
-    ? process.env.BACKEND_URL_PROD || 'https://server.saasdor.com'
-    : process.env.BACKEND_URL_DEV || 'http://localhost:5000';
+    ? 'https://server.saasdor.com'
+    : `http://localhost:${port}`;
 
   return {
     frontendUrl,
@@ -47,17 +48,28 @@ export function getOAuthRedirectUri(service: string): string {
  * Get CORS origins - simplified to always allow localhost
  */
 export function getCorsOrigins(): string[] {
-  return [
+  const config = getEnvironmentConfig();
+  const origins = [
+    config.frontendUrl,
     'http://localhost:3000',
     'http://localhost:3001', 
     'http://localhost:3002',
     'http://localhost:3003',
     'http://localhost:3004',
-    'http://localhost:5173',
-    'https://saasdor.com',
-    'https://www.saasdor.com',
-    'https://server.saasdor.com'
+    'http://localhost:5173'
   ];
+  
+  // Add production URLs if in production
+  if (config.isProduction) {
+    origins.push(
+      'https://saasdor.com',
+      'https://www.saasdor.com',
+      'https://server.saasdor.com'
+    );
+  }
+  
+  // Remove duplicates
+  return [...new Set(origins)];
 }
 
 /**
