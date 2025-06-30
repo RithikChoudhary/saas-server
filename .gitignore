@@ -1,0 +1,51 @@
+# Node modules - no one wants to upload 500MB of dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Env files - sensitive stuff, hide your secrets
+
+
+# Build output (for things like TypeScript, bundlers, etc.)
+dist/
+build/
+tmp/
+temp/
+
+# Dependency managers lock files (optional - depends on your workflow)
+package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.swp
+
+# Coverage reports
+coverage/
+
+# Testing stuff
+.nyc_output/
+
+# Local runtime files
+.pids
+*.pid
+*.seed
+*.pid.lock
+
+# PM2
+.pmx
+*.pm2
+
+# Optional: ignore uploads or st

@@ -1,0 +1,10 @@
+{
+  "watch": ["src"],
+  "ext": "ts,js,json",
+  "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts", "dist/**/*", "node_modules/**/*"],
+  "exec": "node --max-old-space-size=2048 --optimize-for-size --gc-interval=100 --expose-gc -r ts-node/register src/server.ts",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000
+}
