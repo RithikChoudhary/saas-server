@@ -43,19 +43,15 @@ connectDB().then(() => {
 app.use(helmet());
 
 // CORS configuration
+import { getCorsOrigins, logEnvironmentConfig } from './shared/utils/environmentConfig';
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001', 
-    'http://localhost:3002',
-    'http://localhost:3003',
-    'http://localhost:3004',
-    'http://localhost:5173',
-    process.env.FRONTEND_URL || 'http://localhost:3000'
-  ],
+  origin: getCorsOrigins(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 
 // Body parsing middleware with reduced limits for memory efficiency
@@ -187,8 +183,7 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 // Start server 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  logEnvironmentConfig();
   logMemoryUsage('💾 Initial memory usage');
   
   // Start periodic memory cleanup
