@@ -37,8 +37,7 @@ const GoogleWorkspaceGroupSchema: Schema = new Schema({
   },
   email: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   name: {
     type: String,
@@ -75,10 +74,9 @@ const GoogleWorkspaceGroupSchema: Schema = new Schema({
 // Indexes
 GoogleWorkspaceGroupSchema.index({ companyId: 1, googleGroupId: 1 }, { unique: true });
 GoogleWorkspaceGroupSchema.index({ companyId: 1, connectionId: 1 });
-GoogleWorkspaceGroupSchema.index({ companyId: 1, email: 1 });
+GoogleWorkspaceGroupSchema.index({ companyId: 1, email: 1 }, { unique: true }); // Unique email per company
 GoogleWorkspaceGroupSchema.index({ companyId: 1, isActive: 1 });
 GoogleWorkspaceGroupSchema.index({ companyId: 1, directMembersCount: 1 });
 GoogleWorkspaceGroupSchema.index({ companyId: 1, adminCreated: 1 });
-GoogleWorkspaceGroupSchema.index({ email: 1 });
 
 export const GoogleWorkspaceGroup = mongoose.model<IGoogleWorkspaceGroup>('GoogleWorkspaceGroup', GoogleWorkspaceGroupSchema);

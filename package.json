@@ -7,7 +7,8 @@
     "dev": "nodemon",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "clean": "rm -rf node_modules package-lock.json && npm install"
+    "clean": "rm -rf node_modules package-lock.json && npm install",
+    "sync": "ts-node src/scripts/syncAndCorrelate.ts"
   },
   "keywords": [],
   "author": "",

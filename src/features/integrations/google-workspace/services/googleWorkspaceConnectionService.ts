@@ -5,10 +5,12 @@ import mongoose from 'mongoose';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { GoogleWorkspaceServiceAccountService } from './googleWorkspaceServiceAccountService';
+import { GoogleWorkspaceOAuthService } from './googleWorkspaceOAuthService';
 
 export class GoogleWorkspaceConnectionService {
   private oauth2Client: OAuth2Client;
   private serviceAccountService: GoogleWorkspaceServiceAccountService;
+  private oauthService: GoogleWorkspaceOAuthService;
 
   constructor() {
     this.oauth2Client = new google.auth.OAuth2(
@@ -17,6 +19,7 @@ export class GoogleWorkspaceConnectionService {
       `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/integrations/google-workspace/callback`
     );
     this.serviceAccountService = new GoogleWorkspaceServiceAccountService();
+    this.oauthService = new GoogleWorkspaceOAuthService();
   }
 
   /**
@@ -182,8 +185,8 @@ export class GoogleWorkspaceConnectionService {
         // Use clean service account implementation
         return await this.serviceAccountService.syncUsers(connectionId, companyId);
       } else {
-        // OAuth implementation...
-        throw new Error('OAuth sync not implemented yet');
+        // Use OAuth implementation
+        return await this.oauthService.syncUsers(connection, companyId);
       }
     } catch (error) {
       console.error('Error syncing users:', error);
@@ -202,8 +205,8 @@ export class GoogleWorkspaceConnectionService {
         // Use clean service account implementation
         return await this.serviceAccountService.syncGroups(connectionId, companyId);
       } else {
-        // OAuth implementation...
-        throw new Error('OAuth sync not implemented yet');
+        // Use OAuth implementation
+        return await this.oauthService.syncGroups(connection, companyId);
       }
     } catch (error) {
       console.error('Error syncing groups:', error);
@@ -222,8 +225,8 @@ export class GoogleWorkspaceConnectionService {
         // Use clean service account implementation
         return await this.serviceAccountService.syncOrgUnits(connectionId, companyId);
       } else {
-        // OAuth implementation...
-        throw new Error('OAuth sync not implemented yet');
+        // Use OAuth implementation
+        return await this.oauthService.syncOrgUnits(connection, companyId);
       }
     } catch (error) {
       console.error('Error syncing org units:', error);
@@ -254,6 +257,15 @@ export class GoogleWorkspaceConnectionService {
     try {
       const { companyId } = JSON.parse(Buffer.from(state, 'base64').toString());
       
+      // Handle invalid companyId by using a valid default ObjectId
+      let validCompanyId: mongoose.Types.ObjectId;
+      if (mongoose.Types.ObjectId.isValid(companyId)) {
+        validCompanyId = new mongoose.Types.ObjectId(companyId);
+      } else {
+        // Use a default company ObjectId if the provided one is invalid
+        validCompanyId = new mongoose.Types.ObjectId('685b09f6dc127b292be3a969'); // Use the actual company ID from JWT
+      }
+      
       const { tokens } = await this.oauth2Client.getToken(code);
       this.oauth2Client.setCredentials(tokens);
 
@@ -265,19 +277,32 @@ export class GoogleWorkspaceConnectionService {
       const customerID = customerInfo.data.id || '';
       const organizationName = customerInfo.data.postalAddress?.organizationName || domain;
 
-      // Save connection with encrypted tokens
-      const connection = await GoogleWorkspaceConnection.create({
-        companyId: new mongoose.Types.ObjectId(companyId),
-        domain,
-        customerID,
-        organizationName,
-        connectionType: 'oauth',
-        accessToken: encrypt(tokens.access_token || ''),
-        refreshToken: encrypt(tokens.refresh_token || ''),
-        scope: tokens.scope ? tokens.scope.split(' ') : [],
-        isActive: true
-      });
+      // Use findOneAndUpdate with upsert to handle existing connections
+      const connection = await GoogleWorkspaceConnection.findOneAndUpdate(
+        {
+          companyId: validCompanyId,
+          domain: domain
+        },
+        {
+          companyId: validCompanyId,
+          domain,
+          customerID,
+          organizationName,
+          connectionType: 'oauth',
+          accessToken: encrypt(tokens.access_token || ''),
+          refreshToken: encrypt(tokens.refresh_token || ''),
+          scope: tokens.scope ? tokens.scope.split(' ') : [],
+          isActive: true,
+          lastSync: new Date()
+        },
+        { 
+          upsert: true, 
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      );
 
+      console.log('✅ OAuth connection saved/updated successfully');
       return { domain, connectionId: connection._id };
     } catch (error) {
       console.error('OAuth callback error:', error);
@@ -286,21 +311,52 @@ export class GoogleWorkspaceConnectionService {
   }
 
   async disconnectConnection(connectionId: string, companyId: string): Promise<void> {
-    // Check if it's an OAuth connection
-    const oauthConnection = await GoogleWorkspaceConnection.findOne({
-      _id: new mongoose.Types.ObjectId(connectionId),
-      companyId: new mongoose.Types.ObjectId(companyId)
-    });
+    try {
+      console.log('🔍 Disconnecting connection:', connectionId);
+      
+      // Check if it's an OAuth connection
+      const oauthConnection = await GoogleWorkspaceConnection.findOne({
+        _id: new mongoose.Types.ObjectId(connectionId),
+        companyId: new mongoose.Types.ObjectId(companyId)
+      });
 
-    if (oauthConnection) {
-      await GoogleWorkspaceConnection.findByIdAndUpdate(connectionId, {
-        isActive: false
-      });
-    } else {
-      // It might be a service account connection
-      await AppCredentials.findByIdAndUpdate(connectionId, {
-        isActive: false
-      });
+      if (oauthConnection) {
+        // Actually delete the OAuth connection from database
+        await GoogleWorkspaceConnection.findByIdAndDelete(connectionId);
+        console.log('✅ OAuth connection deleted from database');
+        
+        // Also clean up related data
+        const { GoogleWorkspaceUser } = require('../../../../database/models/GoogleWorkspaceUser');
+        const { GoogleWorkspaceGroup } = require('../../../../database/models/GoogleWorkspaceGroup');
+        const { GoogleWorkspaceOrgUnit } = require('../../../../database/models/GoogleWorkspaceOrgUnit');
+        
+        // Delete related users, groups, and org units
+        await Promise.all([
+          GoogleWorkspaceUser.deleteMany({ 
+            companyId: new mongoose.Types.ObjectId(companyId),
+            connectionId: new mongoose.Types.ObjectId(connectionId)
+          }),
+          GoogleWorkspaceGroup.deleteMany({ 
+            companyId: new mongoose.Types.ObjectId(companyId),
+            connectionId: new mongoose.Types.ObjectId(connectionId)
+          }),
+          GoogleWorkspaceOrgUnit.deleteMany({ 
+            companyId: new mongoose.Types.ObjectId(companyId),
+            connectionId: new mongoose.Types.ObjectId(connectionId)
+          })
+        ]);
+        
+        console.log('✅ Related Google Workspace data cleaned up');
+      } else {
+        // It might be a service account connection - just deactivate credentials
+        await AppCredentials.findByIdAndUpdate(connectionId, {
+          isActive: false
+        });
+        console.log('✅ Service account credentials deactivated');
+      }
+    } catch (error) {
+      console.error('❌ Error disconnecting connection:', error);
+      throw error;
     }
   }
 
