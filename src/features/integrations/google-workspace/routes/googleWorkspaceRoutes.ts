@@ -11,17 +11,17 @@ const connectionService = new GoogleWorkspaceConnectionService();
 // ==================== CONNECTION ROUTES ====================
 
 // Get all connections for a company
-router.get('/connections', (req, res) => {
+router.get('/connections', authenticate, (req, res) => {
   controller.getConnections(req, res);
 });
 
 // Get a specific connection
-router.get('/connections/:connectionId', (req, res) => {
+router.get('/connections/:connectionId', authenticate, (req, res) => {
   controller.getConnection(req, res);
 });
 
 // Delete a connection
-router.delete('/connections/:connectionId', (req, res) => {
+router.delete('/connections/:connectionId', authenticate, (req, res) => {
   controller.deleteConnection(req, res);
 });
 
@@ -162,7 +162,7 @@ router.post('/sync/all', (req, res) => {
 // ==================== ANALYTICS ROUTES ====================
 
 // Get analytics data
-router.get('/analytics', (req, res) => {
+router.get('/analytics', authenticate, (req, res) => {
   controller.getAnalytics(req, res);
 });
 
