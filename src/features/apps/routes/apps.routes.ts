@@ -8,12 +8,17 @@ import {
   removeAppFromCompany,
   updateAppUsers 
 } from '../controllers/apps.controller';
+import { AppsDashboardController } from '../controllers/appsDashboard.controller';
 import appCredentialsRoutes from './appCredentials.routes';
 
 const router = Router();
+const appsDashboardController = new AppsDashboardController();
 
 // App credentials routes
 router.use('/credentials', appCredentialsRoutes);
+
+// Apps dashboard - comprehensive overview with real data
+router.get('/dashboard', authenticate, appsDashboardController.getDashboard.bind(appsDashboardController));
 
 // Get all available apps
 router.get('/available', authenticate, getAvailableApps);
