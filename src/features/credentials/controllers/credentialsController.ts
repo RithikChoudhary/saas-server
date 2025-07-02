@@ -344,4 +344,136 @@ export class CredentialsController {
       });
     }
   }
+
+  // GET /api/credentials/services/status
+  async getServicesStatus(req: AuthenticatedRequest, res: Response) {
+    try {
+      console.log('🔍 Credentials: Getting services status...');
+      
+      const companyId = req.user?.companyId;
+      
+      if (!companyId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Company ID not found in request'
+        });
+      }
+
+      const servicesStatus = await this.credentialsService.getServicesStatus(companyId);
+
+      console.log('✅ Credentials: Successfully got services status');
+      res.json({
+        success: true,
+        data: servicesStatus
+      });
+    } catch (error) {
+      console.error('❌ Credentials Services Status Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get services status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // POST /api/credentials/services/:appType/connect
+  async smartConnect(req: AuthenticatedRequest, res: Response) {
+    try {
+      console.log('🔍 Credentials: Smart connect initiated...');
+      
+      const companyId = req.user?.companyId;
+      
+      if (!companyId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Company ID not found in request'
+        });
+      }
+
+      const { appType } = req.params;
+      const result = await this.credentialsService.smartConnect(companyId, appType);
+
+      console.log('✅ Credentials: Smart connect result:', result);
+      res.json(result);
+    } catch (error) {
+      console.error('❌ Credentials Smart Connect Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to initiate connection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // DELETE /api/credentials/services/:appType/disconnect
+  async disconnectService(req: AuthenticatedRequest, res: Response) {
+    try {
+      console.log('🔍 Credentials: Disconnecting service...');
+      
+      const companyId = req.user?.companyId;
+      
+      if (!companyId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Company ID not found in request'
+        });
+      }
+
+      const { appType } = req.params;
+      
+      console.log(`🔄 Disconnecting ${appType} for company ${companyId}...`);
+      
+      const result = await this.credentialsService.disconnectService(companyId, appType);
+
+      console.log('✅ Credentials: Service disconnected successfully');
+      res.json({
+        success: true,
+        message: `${appType} has been disconnected and all related data has been removed.`,
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Credentials Disconnect Service Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to disconnect service',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // DELETE /api/credentials/services/:appType
+  async deleteServiceCredentials(req: AuthenticatedRequest, res: Response) {
+    try {
+      console.log('🔍 Credentials: Deleting service credentials...');
+      
+      const companyId = req.user?.companyId;
+      
+      if (!companyId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Company ID not found in request'
+        });
+      }
+
+      const { appType } = req.params;
+      
+      console.log(`🔄 Deleting all ${appType} credentials for company ${companyId}...`);
+      
+      const result = await this.credentialsService.deleteServiceCredentials(companyId, appType);
+
+      console.log('✅ Credentials: Service credentials deleted successfully');
+      res.json({
+        success: true,
+        message: `All ${appType} credentials have been deleted.`,
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Credentials Delete Service Credentials Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete service credentials',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }

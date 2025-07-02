@@ -108,13 +108,23 @@ export class GoogleWorkspaceController {
    */
   async getUsers(req: Request, res: Response) {
     try {
+      console.log('🔍 CONTROLLER: getUsers called');
+      console.log('📋 Query params:', req.query);
+      console.log('👤 User from auth:', req.user);
+      
       const { companyId, connectionId, page = 1, limit = 50, search, isActive } = req.query;
       
-      if (!companyId) {
+      // Use companyId from auth middleware if not provided in query
+      const finalCompanyId = companyId || req.user?.companyId;
+      
+      console.log('🏢 Final companyId:', finalCompanyId);
+      
+      if (!finalCompanyId) {
+        console.log('❌ No company ID available');
         return res.status(400).json({ error: 'Company ID is required' });
       }
 
-      const query: any = { companyId: new mongoose.Types.ObjectId(companyId as string) };
+      const query: any = { companyId: new mongoose.Types.ObjectId(finalCompanyId as string) };
       
       if (connectionId) {
         query.connectionId = new mongoose.Types.ObjectId(connectionId as string);
@@ -133,9 +143,13 @@ export class GoogleWorkspaceController {
         ];
       }
 
+      console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
+
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
       const skip = (pageNum - 1) * limitNum;
+
+      console.log('📄 Pagination: page', pageNum, 'limit', limitNum, 'skip', skip);
 
       const [users, total] = await Promise.all([
         GoogleWorkspaceUser.find(query)
@@ -145,6 +159,8 @@ export class GoogleWorkspaceController {
           .lean(),
         GoogleWorkspaceUser.countDocuments(query)
       ]);
+
+      console.log('📊 Query results: found', users.length, 'users, total', total);
 
       res.json({
         success: true,
@@ -157,7 +173,7 @@ export class GoogleWorkspaceController {
         }
       });
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('❌ Error fetching users:', error);
       res.status(500).json({ 
         error: 'Failed to fetch users',
         details: (error as Error).message 
@@ -293,13 +309,23 @@ export class GoogleWorkspaceController {
    */
   async getGroups(req: Request, res: Response) {
     try {
+      console.log('🔍 CONTROLLER: getGroups called');
+      console.log('📋 Query params:', req.query);
+      console.log('👤 User from auth:', req.user);
+      
       const { companyId, connectionId, page = 1, limit = 50, search, isActive } = req.query;
       
-      if (!companyId) {
+      // Use companyId from auth middleware if not provided in query
+      const finalCompanyId = companyId || req.user?.companyId;
+      
+      console.log('🏢 Final companyId:', finalCompanyId);
+      
+      if (!finalCompanyId) {
+        console.log('❌ No company ID available');
         return res.status(400).json({ error: 'Company ID is required' });
       }
 
-      const query: any = { companyId: new mongoose.Types.ObjectId(companyId as string) };
+      const query: any = { companyId: new mongoose.Types.ObjectId(finalCompanyId as string) };
       
       if (connectionId) {
         query.connectionId = new mongoose.Types.ObjectId(connectionId as string);
@@ -317,9 +343,13 @@ export class GoogleWorkspaceController {
         ];
       }
 
+      console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
+
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
       const skip = (pageNum - 1) * limitNum;
+
+      console.log('📄 Pagination: page', pageNum, 'limit', limitNum, 'skip', skip);
 
       const [groups, total] = await Promise.all([
         GoogleWorkspaceGroup.find(query)
@@ -329,6 +359,8 @@ export class GoogleWorkspaceController {
           .lean(),
         GoogleWorkspaceGroup.countDocuments(query)
       ]);
+
+      console.log('📊 Query results: found', groups.length, 'groups, total', total);
 
       res.json({
         success: true,
@@ -341,7 +373,7 @@ export class GoogleWorkspaceController {
         }
       });
     } catch (error) {
-      console.error('Error fetching groups:', error);
+      console.error('❌ Error fetching groups:', error);
       res.status(500).json({ 
         error: 'Failed to fetch groups',
         details: (error as Error).message 
@@ -559,52 +591,100 @@ export class GoogleWorkspaceController {
       // Get companyId from authenticated user (set by auth middleware)
       const companyId = (req as any).user?.companyId || req.query.companyId;
       
+      console.log('📊 Analytics: Getting analytics for companyId:', companyId);
+      
       if (!companyId) {
         return res.status(400).json({ error: 'Company ID is required' });
       }
 
       const companyObjectId = new mongoose.Types.ObjectId(companyId as string);
 
+      console.log('🔍 Analytics: Querying with companyObjectId:', companyObjectId);
+
       const [
         totalUsers,
         activeUsers,
         suspendedUsers,
+        archivedUsers,
         adminUsers,
+        superAdminUsers,
+        delegatedAdminUsers,
+        users2svEnrolled,
+        users2svEnforced,
         totalGroups,
+        adminCreatedGroups,
         totalOrgUnits,
         connections
       ] = await Promise.all([
         GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId }),
         GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isActive: true }),
         GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, suspended: true }),
+        GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, archived: true }),
         GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isAdmin: true }),
+        GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isSuperAdmin: true }),
+        GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isDelegatedAdmin: true }),
+        GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isEnrolledIn2Sv: true }),
+        GoogleWorkspaceUser.countDocuments({ companyId: companyObjectId, isEnforcedIn2Sv: true }),
         GoogleWorkspaceGroup.countDocuments({ companyId: companyObjectId }),
+        GoogleWorkspaceGroup.countDocuments({ companyId: companyObjectId, adminCreated: true }),
         GoogleWorkspaceOrgUnit.countDocuments({ companyId: companyObjectId }),
         GoogleWorkspaceConnection.countDocuments({ companyId: companyObjectId, isActive: true })
       ]);
 
+      console.log('📊 Analytics results:', {
+        totalUsers,
+        activeUsers,
+        suspendedUsers,
+        archivedUsers,
+        adminUsers,
+        superAdminUsers,
+        delegatedAdminUsers,
+        users2svEnrolled,
+        users2svEnforced,
+        totalGroups,
+        adminCreatedGroups,
+        totalOrgUnits,
+        connections
+      });
+
+      const analytics = {
+        users: {
+          total: totalUsers,
+          active: activeUsers,
+          suspended: suspendedUsers,
+          archived: archivedUsers,
+          admins: adminUsers,
+          superAdmins: superAdminUsers,
+          delegatedAdmins: delegatedAdminUsers,
+          twoFactorEnrolled: users2svEnrolled,
+          twoFactorEnforced: users2svEnforced
+        },
+        groups: {
+          total: totalGroups,
+          adminCreated: adminCreatedGroups,
+          userCreated: totalGroups - adminCreatedGroups
+        },
+        orgUnits: {
+          total: totalOrgUnits
+        },
+        connections: {
+          total: connections
+        },
+        security: {
+          twoFactorPercentage: totalUsers > 0 ? Math.round((users2svEnrolled / totalUsers) * 100) : 0,
+          adminPercentage: totalUsers > 0 ? Math.round((adminUsers / totalUsers) * 100) : 0,
+          activePercentage: totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0
+        }
+      };
+
+      console.log('✅ Analytics: Sending response:', analytics);
+
       res.json({
         success: true,
-        analytics: {
-          users: {
-            total: totalUsers,
-            active: activeUsers,
-            suspended: suspendedUsers,
-            admins: adminUsers
-          },
-          groups: {
-            total: totalGroups
-          },
-          orgUnits: {
-            total: totalOrgUnits
-          },
-          connections: {
-            total: connections
-          }
-        }
+        analytics
       });
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error('❌ Error fetching analytics:', error);
       res.status(500).json({ 
         error: 'Failed to fetch analytics',
         details: (error as Error).message 

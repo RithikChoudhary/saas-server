@@ -1,7 +1,24 @@
 import crypto from 'crypto';
 
 const algorithm = 'aes-256-gcm';
-const secretKey = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+
+// Generate a consistent key if ENCRYPTION_KEY is not set
+const getSecretKey = (): string => {
+  if (process.env.ENCRYPTION_KEY) {
+    return process.env.ENCRYPTION_KEY;
+  }
+  
+  // Use a deterministic fallback key for development
+  // In production, ENCRYPTION_KEY should always be set
+  const fallbackKey = crypto.createHash('sha256')
+    .update('saas-management-platform-default-key')
+    .digest('hex');
+  
+  console.warn('⚠️  ENCRYPTION_KEY not set in environment variables. Using fallback key. This is not secure for production!');
+  return fallbackKey;
+};
+
+const secretKey = getSecretKey();
 
 export function encrypt(text: string): { encrypted: string; iv: string; authTag: string } {
   const iv = crypto.randomBytes(16);

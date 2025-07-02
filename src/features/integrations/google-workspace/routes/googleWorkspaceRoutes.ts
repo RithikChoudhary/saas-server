@@ -99,63 +99,74 @@ router.post('/test-connection', (req, res) => {
 // ==================== USER ROUTES ====================
 
 // Get all users
-router.get('/users', (req, res) => {
+router.get('/users', authenticate, (req, res) => {
+  console.log('📥 GET /users - Request received:', req.query);
   controller.getUsers(req, res);
 });
 
 // Get a specific user
-router.get('/users/:userId', (req, res) => {
+router.get('/users/:userId', authenticate, (req, res) => {
+  console.log('📥 GET /users/:userId - Request received:', req.params);
   controller.getUser(req, res);
 });
 
 // Update a user (local data only)
-router.put('/users/:userId', (req, res) => {
+router.put('/users/:userId', authenticate, (req, res) => {
+  console.log('📥 PUT /users/:userId - Request received:', req.params);
   controller.updateUser(req, res);
 });
 
 // Delete a user (local data only)
-router.delete('/users/:userId', (req, res) => {
+router.delete('/users/:userId', authenticate, (req, res) => {
+  console.log('📥 DELETE /users/:userId - Request received:', req.params);
   controller.deleteUser(req, res);
 });
 
 // ==================== GROUP ROUTES ====================
 
 // Get all groups
-router.get('/groups', (req, res) => {
+router.get('/groups', authenticate, (req, res) => {
+  console.log('📥 GET /groups - Request received:', req.query);
   controller.getGroups(req, res);
 });
 
 // Get a specific group
-router.get('/groups/:groupId', (req, res) => {
+router.get('/groups/:groupId', authenticate, (req, res) => {
+  console.log('📥 GET /groups/:groupId - Request received:', req.params);
   controller.getGroup(req, res);
 });
 
 // ==================== ORG UNIT ROUTES ====================
 
 // Get all organizational units
-router.get('/org-units', (req, res) => {
+router.get('/org-units', authenticate, (req, res) => {
+  console.log('📥 GET /org-units - Request received:', req.query);
   controller.getOrgUnits(req, res);
 });
 
 // ==================== SYNC ROUTES ====================
 
 // Sync users
-router.post('/sync/users', (req, res) => {
+router.post('/sync/users', authenticate, (req, res) => {
+  console.log('📥 POST /sync/users - Request received:', req.body);
   controller.syncUsers(req, res);
 });
 
 // Sync groups
-router.post('/sync/groups', (req, res) => {
+router.post('/sync/groups', authenticate, (req, res) => {
+  console.log('📥 POST /sync/groups - Request received:', req.body);
   controller.syncGroups(req, res);
 });
 
 // Sync organizational units
-router.post('/sync/org-units', (req, res) => {
+router.post('/sync/org-units', authenticate, (req, res) => {
+  console.log('📥 POST /sync/org-units - Request received:', req.body);
   controller.syncOrgUnits(req, res);
 });
 
 // Sync all data
-router.post('/sync/all', (req, res) => {
+router.post('/sync/all', authenticate, (req, res) => {
+  console.log('📥 POST /sync/all - Request received:', req.body);
   controller.syncAll(req, res);
 });
 

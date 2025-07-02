@@ -1,29 +1,44 @@
 import { SlackConnection, SlackWorkspace } from '../../../../database/models';
 import mongoose from 'mongoose';
 import { encrypt, decrypt } from '../../../../utils/encryption';
-import { AppCredentialsService } from '../../../apps/services/appCredentialsService';
+import { CredentialsService } from '../../../credentials/services/credentialsService';
 import axios from 'axios';
 
 export class SlackConnectionService {
-  private appCredentialsService: AppCredentialsService;
+  private credentialsService: CredentialsService;
 
   constructor() {
-    this.appCredentialsService = new AppCredentialsService();
+    this.credentialsService = new CredentialsService();
   }
 
   async initiateOAuth(companyId: string): Promise<string> {
+    console.log('🔍 Slack OAuth: Getting credentials for company:', companyId);
+    
     // Get company-specific Slack credentials
-    const credentialsData = await this.appCredentialsService.getCredentials(companyId, 'slack');
+    const credentialsData = await this.credentialsService.getDecryptedCredentials(companyId, 'slack');
     
     if (!credentialsData) {
       throw new Error('Slack credentials not configured for this company. Please add your Slack app credentials first.');
     }
 
-    const { clientId, clientSecret } = credentialsData.credentials;
+    console.log('📋 Slack OAuth: Found credentials:', Object.keys(credentialsData));
+
+    const { clientId, clientSecret } = credentialsData;
     
     if (!clientId || !clientSecret) {
+      console.error('❌ Slack OAuth: Missing credentials', { 
+        hasClientId: !!clientId, 
+        hasClientSecret: !!clientSecret,
+        clientIdLength: clientId?.length || 0,
+        clientSecretLength: clientSecret?.length || 0
+      });
       throw new Error('Slack credentials are incomplete. Please ensure both Client ID and Client Secret are provided.');
     }
+
+    console.log('✅ Slack OAuth: Credentials validated', {
+      clientIdLength: clientId.length,
+      clientSecretLength: clientSecret.length
+    });
 
     // Generate state for CSRF protection
     const state = Buffer.from(JSON.stringify({
@@ -48,31 +63,47 @@ export class SlackConnectionService {
       'files:read'
     ].join(',');
 
-    const redirectUri = credentialsData.credentials.redirectUri || 'http://localhost:5000/api/integrations/slack/callback';
+    const redirectUri = credentialsData.redirectUri || 'http://localhost:5000/api/integrations/slack/callback';
+
+    console.log('🔗 Slack OAuth: Building auth URL', {
+      clientId: clientId.substring(0, 10) + '...',
+      redirectUri,
+      scopeCount: scopes.split(',').length
+    });
 
     const authUrl = `https://slack.com/oauth/v2/authorize?` +
-      `client_id=${clientId}&` +
+      `client_id=${encodeURIComponent(clientId)}&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `state=${state}`;
 
+    console.log('✅ Slack OAuth: Auth URL generated successfully');
     return authUrl;
   }
 
   async handleOAuthCallback(code: string, state: string): Promise<any> {
     try {
+      console.log('🔄 Slack OAuth Callback: Processing callback...');
+      
       // Decode and validate state
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      console.log('📋 Slack OAuth Callback: State decoded for company:', stateData.companyId);
       
       // Get company-specific Slack credentials
-      const credentialsData = await this.appCredentialsService.getCredentials(stateData.companyId, 'slack');
+      const credentialsData = await this.credentialsService.getDecryptedCredentials(stateData.companyId, 'slack');
       
       if (!credentialsData) {
         throw new Error('Slack credentials not found for this company');
       }
 
-      const { clientId, clientSecret } = credentialsData.credentials;
-      const redirectUri = credentialsData.credentials.redirectUri || 'http://localhost:5000/api/integrations/slack/callback';
+      const { clientId, clientSecret } = credentialsData;
+      const redirectUri = credentialsData.redirectUri || 'http://localhost:5000/api/integrations/slack/callback';
+      
+      console.log('🔑 Slack OAuth Callback: Using credentials', {
+        clientIdLength: clientId?.length || 0,
+        clientSecretLength: clientSecret?.length || 0,
+        redirectUri
+      });
       
       // Exchange code for access token
       const tokenResponse = await axios.post(
