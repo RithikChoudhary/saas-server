@@ -7,6 +7,7 @@ import { GitHubConnection } from '../../../database/models/GitHubConnection';
 import { SlackConnection } from '../../../database/models/SlackConnection';
 import { ZoomConnection } from '../../../database/models/ZoomConnection';
 import { GoogleWorkspaceConnection } from '../../../database/models/GoogleWorkspaceConnection';
+import { DatadogConnection } from '../../../database/models/DatadogConnection';
 
 export interface CredentialValidation {
   isValid: boolean;
@@ -256,6 +257,21 @@ export class CredentialsService {
           { name: 'region', label: 'Default Region', type: 'text', required: true, default: 'us-east-1' }
         ],
         instructions: 'Create AWS IAM credentials with appropriate permissions for your organization.'
+      },
+      datadog: {
+        fields: [
+          { name: 'organizationName', label: 'Organization Name', type: 'text', required: true },
+          { name: 'site', label: 'Datadog Site', type: 'select', required: true, default: 'datadoghq.com', options: [
+            { value: 'datadoghq.com', label: 'US1 (datadoghq.com)' },
+            { value: 'us3.datadoghq.com', label: 'US3 (us3.datadoghq.com)' },
+            { value: 'us5.datadoghq.com', label: 'US5 (us5.datadoghq.com)' },
+            { value: 'datadoghq.eu', label: 'EU (datadoghq.eu)' },
+            { value: 'ap1.datadoghq.com', label: 'AP1 (ap1.datadoghq.com)' }
+          ]},
+          { name: 'apiKey', label: 'API Key', type: 'password', required: true },
+          { name: 'applicationKey', label: 'Application Key', type: 'password', required: true }
+        ],
+        instructions: 'Go to Datadog Organization Settings → API Keys to create an API Key, then go to Application Keys to create an Application Key. Both are required for full access to Datadog APIs.'
       }
     };
 
@@ -355,6 +371,14 @@ export class CredentialsService {
         icon: '🔷',
         color: 'bg-blue-100 text-blue-800 border-blue-200',
         category: 'cloud'
+      },
+      {
+        id: 'datadog',
+        name: 'Datadog',
+        description: 'Modern monitoring and security platform for cloud applications',
+        icon: '🐕',
+        color: 'bg-purple-100 text-purple-800 border-purple-200',
+        category: 'monitoring'
       }
     ];
 
@@ -408,6 +432,14 @@ export class CredentialsService {
                 });
                 hasActiveConnection = awsAccounts.length > 0;
                 break;
+                
+              case 'datadog':
+                const datadogConns = await DatadogConnection.find({ 
+                  companyId: new mongoose.Types.ObjectId(companyId), 
+                  isActive: true 
+                });
+                hasActiveConnection = datadogConns.length > 0;
+                break;
             }
           } catch (error) {
             console.warn(`Could not check active connections for ${service.id}:`, error instanceof Error ? error.message : 'Unknown error');
@@ -444,8 +476,8 @@ export class CredentialsService {
               connectionStatus = 'setup-required';
               actionText = 'Setup & Connect';
             }
-          } else if (['aws'].includes(service.id)) {
-            // AWS only supports credential-based connection
+          } else if (['aws', 'datadog'].includes(service.id)) {
+            // AWS and Datadog only support credential-based connection
             oauthAvailable = false;
             if (hasCredentials) {
               connectionStatus = 'available';
@@ -583,6 +615,31 @@ export class CredentialsService {
             success: false,
             action: 'connection-failed',
             message: `Failed to connect to AWS: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      } else if (appType === 'datadog') {
+        // For Datadog, test credentials and create connection
+        try {
+          const credentials = await this.getDecryptedCredentials(companyId, appType);
+          if (!credentials) {
+            return {
+              success: false,
+              action: 'credentials-invalid',
+              message: 'Failed to decrypt Datadog credentials. Please re-enter your credentials.',
+              redirectTo: 'credentials-setup'
+            };
+          }
+
+          // Test Datadog credentials and create connection
+          const connectionResult = await this.connectDatadog(companyId, credentials);
+          return connectionResult;
+        } catch (error) {
+          console.error(`❌ Smart Connect Datadog Error:`, error);
+          return {
+            success: false,
+            action: 'connection-failed',
+            message: `Failed to connect to Datadog: ${error instanceof Error ? error.message : 'Unknown error'}`,
             error: error instanceof Error ? error.message : 'Unknown error'
           };
         }
@@ -810,21 +867,162 @@ export class CredentialsService {
     }
 
     try {
-      // In a real implementation, you would test the credentials with AWS SDK
-      // For now, we'll create a basic connection record
-      const accountId = `aws-${Date.now()}`;
+      console.log('🔍 AWS: Testing credentials with AWS SDK...');
       
+      // Import AWS SDK
+      const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
+      
+      // Create AWS clients with provided credentials
+      const awsConfig = {
+        region: region || 'us-east-1',
+        credentials: {
+          accessKeyId: accessKey,
+          secretAccessKey: secretKey
+        }
+      };
+
+      // Test credentials using STS GetCallerIdentity (most reliable test)
+      const stsClient = new STSClient(awsConfig);
+      const identityCommand = new GetCallerIdentityCommand({});
+      const identityResult = await stsClient.send(identityCommand);
+      
+      console.log('✅ AWS: Credentials validated successfully');
+      console.log('📊 AWS Identity:', {
+        account: identityResult.Account,
+        userId: identityResult.UserId,
+        arn: identityResult.Arn
+      });
+
+      // Extract real account information
+      const realAccountId = identityResult.Account;
+      const userArn = identityResult.Arn;
+      const userName = userArn ? userArn.split('/').pop() || 'Unknown' : 'Unknown';
+      
+      // Create or update AWS account record with real data
       const awsAccount = await AWSAccount.findOneAndUpdate(
         {
           companyId: new mongoose.Types.ObjectId(companyId),
-          accountId: accountId
+          accountId: realAccountId
         },
         {
-          accountName: `AWS Account (${region || 'us-east-1'})`,
+          accountName: `AWS Account ${realAccountId}`,
+          accountId: realAccountId,
           region: region || 'us-east-1',
           status: 'connected',
           accessType: 'access-keys',
           isActive: true,
+          lastSync: new Date(),
+          // Store additional metadata
+          metadata: {
+            userArn: userArn,
+            userName: userName,
+            connectedAt: new Date()
+          }
+        },
+        {
+          upsert: true,
+          new: true
+        }
+      );
+
+      console.log(`✅ AWS connection created/updated for company ${companyId} with real account ${realAccountId}`);
+      
+      return {
+        success: true,
+        action: 'connected',
+        message: 'AWS connected successfully',
+        accountId: realAccountId,
+        accountName: `AWS Account ${realAccountId}`,
+        region: region || 'us-east-1',
+        userName: userName
+      };
+    } catch (error: any) {
+      console.error('❌ AWS connection error:', error);
+      
+      // Provide more specific error messages based on AWS error codes
+      let errorMessage = 'Failed to connect to AWS';
+      
+      if (error.name === 'InvalidUserType') {
+        errorMessage = 'Invalid AWS credentials: User type not supported';
+      } else if (error.name === 'AccessDenied' || error.message?.includes('AccessDenied')) {
+        errorMessage = 'AWS credentials are valid but lack necessary permissions';
+      } else if (error.name === 'SignatureDoesNotMatch' || error.message?.includes('SignatureDoesNotMatch')) {
+        errorMessage = 'Invalid AWS Secret Access Key';
+      } else if (error.name === 'InvalidAccessKeyId' || error.message?.includes('InvalidAccessKeyId')) {
+        errorMessage = 'Invalid AWS Access Key ID';
+      } else if (error.name === 'TokenRefreshRequired' || error.message?.includes('TokenRefreshRequired')) {
+        errorMessage = 'AWS credentials have expired';
+      } else if (error.message) {
+        errorMessage = `AWS connection failed: ${error.message}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Helper method to connect Datadog
+  private async connectDatadog(companyId: string, credentials: { [key: string]: string }): Promise<any> {
+    const { organizationName, site, apiKey, applicationKey } = credentials;
+    
+    if (!apiKey || !applicationKey) {
+      throw new Error('Datadog API Key and Application Key are required');
+    }
+
+    try {
+      // Test the credentials by making a request to Datadog API
+      const axios = require('axios');
+      const baseUrl = `https://api.${site || 'datadoghq.com'}`;
+      
+      console.log(`🔍 Testing Datadog connection to ${baseUrl}/api/v1/org`);
+      
+      const response = await axios.get(`${baseUrl}/api/v1/org`, {
+        headers: {
+          'DD-API-KEY': apiKey,
+          'DD-APPLICATION-KEY': applicationKey,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10 second timeout
+      });
+
+      console.log('📊 Datadog API response:', response.data);
+
+      // Handle different response structures
+      let orgData;
+      if (response.data && response.data.org) {
+        // Standard response format
+        orgData = response.data.org;
+      } else if (response.data && response.data.public_id) {
+        // Direct org data format
+        orgData = response.data;
+      } else if (response.data) {
+        // Fallback - use response data directly
+        orgData = {
+          public_id: response.data.public_id || `org-${Date.now()}`,
+          name: response.data.name || organizationName || 'Datadog Organization'
+        };
+      } else {
+        throw new Error('Invalid response format from Datadog API');
+      }
+
+      // Ensure we have required fields
+      const organizationId = orgData.public_id || `org-${Date.now()}`;
+      const orgName = orgData.name || organizationName || 'Datadog Organization';
+
+      console.log(`✅ Datadog org data: ID=${organizationId}, Name=${orgName}`);
+
+      // Create or update Datadog connection
+      const connection = await DatadogConnection.findOneAndUpdate(
+        {
+          companyId: new mongoose.Types.ObjectId(companyId),
+          organizationId: organizationId
+        },
+        {
+          organizationName: orgName,
+          organizationId: organizationId,
+          site: site || 'datadoghq.com',
+          connectionType: 'api-key',
+          isActive: true,
+          syncStatus: 'pending',
           lastSync: new Date()
         },
         {
@@ -833,17 +1031,40 @@ export class CredentialsService {
         }
       );
 
-      console.log(`✅ AWS connection created/updated for company ${companyId}`);
+      console.log(`✅ Datadog connection created/updated for company ${companyId}`);
       
       return {
         success: true,
         action: 'connected',
-        message: 'AWS connected successfully',
-        accountId: awsAccount.accountId
+        message: 'Datadog connected successfully',
+        connectionId: (connection._id as any).toString(),
+        organizationName: orgName,
+        organizationId: organizationId
       };
-    } catch (error) {
-      console.error('❌ AWS connection error:', error);
-      throw new Error(`Failed to connect AWS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: any) {
+      console.error('❌ Datadog connection error:', error);
+      
+      // Provide more specific error messages
+      if (error.response) {
+        const status = error.response.status;
+        const statusText = error.response.statusText;
+        
+        if (status === 401) {
+          throw new Error('Invalid Datadog API credentials. Please check your API Key and Application Key.');
+        } else if (status === 403) {
+          throw new Error('Datadog API access forbidden. Please ensure your Application Key has the required permissions.');
+        } else if (status === 404) {
+          throw new Error('Datadog API endpoint not found. Please check your site configuration.');
+        } else {
+          throw new Error(`Datadog API error (${status}): ${statusText}`);
+        }
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new Error('Cannot connect to Datadog API. Please check your internet connection and site configuration.');
+      } else if (error.code === 'ETIMEDOUT') {
+        throw new Error('Datadog API request timed out. Please try again.');
+      } else {
+        throw new Error(`Failed to connect Datadog: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
@@ -923,6 +1144,17 @@ export class CredentialsService {
             });
             for (const account of awsAccounts) {
               await AWSAccount.findByIdAndUpdate(account._id, { isActive: false });
+              results.connectionsDeleted++;
+            }
+            break;
+            
+          case 'datadog':
+            const datadogConnections = await DatadogConnection.find({ 
+              companyId: new mongoose.Types.ObjectId(companyId), 
+              isActive: true 
+            });
+            for (const conn of datadogConnections) {
+              await DatadogConnection.findByIdAndUpdate(conn._id, { isActive: false });
               results.connectionsDeleted++;
             }
             break;

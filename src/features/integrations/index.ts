@@ -8,6 +8,7 @@ export * as integrationServices from './services/realApiIntegration';
 export * from './aws/AWSIntegration';
 export * from './github/GitHubIntegration';
 export * from './office365/Office365Integration';
+export * from './datadog';
 export * from './base/BaseIntegration';
 
 // Integration registry

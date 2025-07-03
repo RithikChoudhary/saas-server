@@ -41,5 +41,11 @@ export { GoogleWorkspaceGroup } from './GoogleWorkspaceGroup';
 export { GoogleWorkspaceOrgUnit } from './GoogleWorkspaceOrgUnit';
 export { GoogleWorkspaceUsageStats } from './GoogleWorkspaceUsageStats';
 
+// Datadog Models
+export { DatadogConnection } from './DatadogConnection';
+export { DatadogUser } from './DatadogUser';
+export { DatadogTeam } from './DatadogTeam';
+export { DatadogUsageStats } from './DatadogUsageStats';
+
 // App Credentials
 export { AppCredentials, IAppCredentials } from './AppCredentials';

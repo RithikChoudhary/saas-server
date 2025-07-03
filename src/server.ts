@@ -14,6 +14,7 @@ import githubRoutes from './features/integrations/github/routes/github.routes';
 import slackRoutes from './features/integrations/slack/routes/slack.routes';
 import zoomRoutes from './features/integrations/zoom/routes/zoom.routes';
 import googleWorkspaceRoutes from './features/integrations/google-workspace/routes/google-workspace.routes';
+import { datadogRoutes, datadogUsersRoutes, datadogTeamsRoutes } from './features/integrations/datadog';
 import dashboardRoutes from './features/dashboard/routes/dashboard.routes';
 import credentialsRoutes from './features/credentials/routes/credentials.routes';
 import { analyticsRoutes } from './features/analytics';
@@ -159,6 +160,9 @@ app.use('/api/integrations/github', githubRoutes);
 app.use('/api/integrations/slack', slackRoutes);
 app.use('/api/integrations/zoom', zoomRoutes);
 app.use('/api/integrations/google-workspace', googleWorkspaceRoutes);
+app.use('/api/integrations/datadog', datadogRoutes);
+app.use('/api/integrations/datadog/users', datadogUsersRoutes);
+app.use('/api/integrations/datadog/teams', datadogTeamsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // 404 handler

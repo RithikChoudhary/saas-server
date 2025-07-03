@@ -204,6 +204,53 @@ export class CredentialsValidator {
     };
   }
 
+  static validateDatadogCredentials(credentials: { [key: string]: string }): CredentialValidationResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    
+    const { organizationName, site, apiKey, applicationKey } = credentials;
+
+    // Required fields validation
+    if (!organizationName) {
+      errors.push('Organization Name is required');
+    } else if (organizationName.length < 2) {
+      warnings.push('Organization Name appears to be too short');
+    }
+
+    if (!site) {
+      errors.push('Datadog Site is required');
+    } else {
+      const validSites = [
+        'datadoghq.com',
+        'us3.datadoghq.com', 
+        'us5.datadoghq.com',
+        'datadoghq.eu',
+        'ap1.datadoghq.com'
+      ];
+      if (!validSites.includes(site)) {
+        warnings.push(`Site should be one of: ${validSites.join(', ')}`);
+      }
+    }
+
+    if (!apiKey) {
+      errors.push('API Key is required');
+    } else if (apiKey.length !== 32) {
+      warnings.push('API Key should be exactly 32 characters long');
+    }
+
+    if (!applicationKey) {
+      errors.push('Application Key is required');
+    } else if (applicationKey.length !== 40) {
+      warnings.push('Application Key should be exactly 40 characters long');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+
   static validateCredentials(appType: string, credentials: { [key: string]: string }): CredentialValidationResult {
     console.log(`🔍 Validating ${appType} credentials...`);
     
@@ -224,6 +271,9 @@ export class CredentialsValidator {
         break;
       case 'aws':
         result = this.validateAWSCredentials(credentials);
+        break;
+      case 'datadog':
+        result = this.validateDatadogCredentials(credentials);
         break;
       default:
         result = {

@@ -9,10 +9,12 @@ import {
   ZoomConnection,
   GitHubConnection,
   GoogleWorkspaceConnection,
+  DatadogConnection,
   SlackUser,
   ZoomUser,
   GitHubUser,
-  GoogleWorkspaceUser
+  GoogleWorkspaceUser,
+  DatadogUser
 } from '../../../database/models';
 
 interface AuthenticatedRequest extends Request {
@@ -235,6 +237,36 @@ export class AppsDashboardController {
         };
       }
 
+      // Datadog connections
+      const datadogConnections = await DatadogConnection.find({ 
+        companyId, 
+        isActive: true 
+      });
+      if (datadogConnections.length > 0) {
+        const datadogUsers = await DatadogUser.find({ 
+          companyId, 
+          isActive: true 
+        });
+        connections.datadog = {
+          type: 'datadog',
+          accounts: datadogConnections.length,
+          users: datadogUsers.length,
+          monthlyCost: 0, // Use real billing data when available
+          lastSync: datadogConnections.reduce((latest: Date | null, conn) => {
+            if (!latest) return conn.lastSync || null;
+            if (!conn.lastSync) return latest;
+            return conn.lastSync > latest ? conn.lastSync : latest;
+          }, null as Date | null),
+          status: 'connected',
+          details: datadogConnections.map(conn => ({
+            id: conn._id,
+            organizationName: conn.organizationName,
+            site: conn.site,
+            lastSync: conn.lastSync
+          }))
+        };
+      }
+
     } catch (error) {
       console.error('Error fetching service connections:', error);
     }
@@ -342,6 +374,15 @@ export class AppsDashboardController {
         category: 'cloud-providers',
         features: ['Virtual Machines', 'Azure AD', 'Storage Accounts', 'Cost Management', 'Security Center'],
         route: '/apps/azure'
+      },
+      datadog: {
+        id: 'datadog',
+        name: 'Datadog',
+        icon: 'https://logos-world.net/wp-content/uploads/2023/10/Datadog-Logo.png',
+        description: 'Modern monitoring and security platform for cloud applications',
+        category: 'monitoring-observability',
+        features: ['Infrastructure Monitoring', 'APM', 'Log Management', 'User Management', 'Team Analytics'],
+        route: '/credentials'
       }
     };
 
@@ -390,6 +431,12 @@ export class AppsDashboardController {
         name: 'Communication & Collaboration',
         description: 'Team communication, video conferencing, and collaboration tools',
         services: services.filter(s => s.category === 'communication-collaboration')
+      },
+      'monitoring-observability': {
+        id: 'monitoring-observability',
+        name: 'Monitoring & Observability',
+        description: 'Application performance monitoring, logging, and observability tools',
+        services: services.filter(s => s.category === 'monitoring-observability')
       }
     };
 
